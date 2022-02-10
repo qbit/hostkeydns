@@ -89,7 +89,7 @@ func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey)
 	return fmt.Errorf("no matching SSHFP record found for %q", host)
 }
 
-//CheckDNSSecHostKey checks a hostkey against a DNSSEC SSHFP records.
+// CheckDNSSecHostKey checks a hostkey against a DNSSEC SSHFP records.
 func CheckDNSSecHostKey(hk DNSSecResolvers) ssh.HostKeyCallback {
 	return hk.check
 }
