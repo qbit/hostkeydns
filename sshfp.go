@@ -6,7 +6,6 @@ package hostkeydns
 
 import (
 	"bytes"
-	"crypto/sha1" // #nosec G505
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -79,13 +78,7 @@ func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey)
 			// If we match, return nil marking success
 			switch fp.Type {
 			case 1:
-				hash := sha1.Sum(keyBytes) // #nosec G401 --
-				if bytes.Equal(fingerprint, hash[:]) {
-					if d.Success != nil {
-						d.Success(key)
-					}
-					return nil
-				}
+				continue
 			case 2:
 				hash := sha256.Sum256(keyBytes)
 				if bytes.Equal(fingerprint, hash[:]) {
