@@ -19,6 +19,7 @@ type DNSSecResolvers struct {
 	Servers []string
 	Port    string
 	Net     string
+	Success func(key ssh.PublicKey)
 }
 
 func (d *DNSSecResolvers) fqdnHostname(name string) string {
@@ -75,11 +76,17 @@ func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey)
 			case 1:
 				hash := sha1.Sum(keyBytes) // #nosec G401 --
 				if bytes.Equal(fingerprint, hash[:]) {
+					if d.Success != nil {
+						d.Success(key)
+					}
 					return nil
 				}
 			case 2:
 				hash := sha256.Sum256(keyBytes)
 				if bytes.Equal(fingerprint, hash[:]) {
+					if d.Success != nil {
+						d.Success(key)
+					}
 					return nil
 				}
 			}
