@@ -16,14 +16,27 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var keyAlgToSSH = map[uint8]string{
+	0: "reserved",
+	1: "ssh-rsa",
+	2: "ssh-dsa",
+	3: "ssh-ecdsa",
+	4: "ssh-ed25519",
+}
+
 // DNSSecResolvers exposes configuration options for resolving hostnames using
 // DNSSEC. Success will be called when a matching fingerprint/SSHFP match is
 // found. Net can be one of "tcp", "tcp-tls" or "udp".
+//
+// If set, HostKeyAlgorithms will restrict matching to _only_ the algorithms
+// listed. The format of the strings match that of OpenSSH ("ssh-ed25519" for
+// example).
 type DNSSecResolvers struct {
-	Servers []string
-	Port    string
-	Net     string
-	Success func(key ssh.PublicKey)
+	Servers           []string
+	Port              string
+	Net               string
+	Success           func(key ssh.PublicKey)
+	HostKeyAlgorithms []string
 }
 
 func (d *DNSSecResolvers) fqdnHostname(name string) string {
@@ -41,10 +54,29 @@ func (d *DNSSecResolvers) hostname(nameAndPort string) string {
 	return nameAndPort
 }
 
+func (d *DNSSecResolvers) algMatch(i uint8) bool {
+	for _, a := range d.HostKeyAlgorithms {
+		if a == keyAlgToSSH[i] {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey) error {
-	config := dns.ClientConfig{
-		Servers: d.Servers,
-		Port:    d.Port,
+	var config *dns.ClientConfig
+	var err error
+	if len(d.Servers) > 0 {
+		config = &dns.ClientConfig{
+			Servers: d.Servers,
+			Port:    d.Port,
+		}
+	} else {
+		// TODO: windows?
+		config, err = dns.ClientConfigFromFile("/etc/resolv.conf")
+		if err != nil {
+			return err
+		}
 	}
 	c := dns.Client{
 		Net: d.Net,
@@ -75,6 +107,12 @@ func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey)
 				return err
 			}
 
+			if len(d.HostKeyAlgorithms) > 0 {
+				if !d.algMatch(fp.Algorithm) {
+					continue
+				}
+			}
+
 			// If we match, return nil marking success
 			switch fp.Type {
 			case 1:
@@ -95,20 +133,40 @@ func (d *DNSSecResolvers) check(host string, remote net.Addr, key ssh.PublicKey)
 }
 
 // CheckDNSSecHostKey checks a hostkey against a DNSSEC SSHFP records.
-func CheckDNSSecHostKey(hk DNSSecResolvers) ssh.HostKeyCallback {
-	return hk.check
+func CheckDNSSecHostKey(dr DNSSecResolvers) ssh.HostKeyCallback {
+	return dr.check
 }
 
-// CheckDNSSecHostKeyEZ checks a hostkey against a DNSSEC SSHFP records using
-// preconfigured name servers (Quad9: https://www.quad9.net/).
-func CheckDNSSecHostKeyEZ() ssh.HostKeyCallback {
-	hk := &DNSSecResolvers{
+var ezResolvers = map[string]DNSSecResolvers{
+	"quad9": {
 		Servers: []string{
 			"9.9.9.9",
 			"149.112.112.112",
 		},
 		Port: "53",
-		Net:  "udp",
+		Net:  "tcp",
+	},
+	"google": {
+		Servers: []string{
+			"8.8.8.8",
+			"8.8.4.4",
+		},
+		Port: "53",
+		Net:  "tcp",
+	},
+	"system": {},
+}
+
+// CheckDNSSecHostKeyEZ checks a hostkey against a DNSSEC SSHFP records using
+// preconfigured name servers. Options are:
+//   - "quad9": https://www.quad9.net/.
+//   - "google": Google's public name servers.
+//   - "system": Use the system resolver (*nix only atm).
+func CheckDNSSecHostKeyEZ(res string) ssh.HostKeyCallback {
+	if hk, ok := ezResolvers[res]; ok {
+		return hk.check
 	}
-	return hk.check
+	return func(host string, remote net.Addr, key ssh.PublicKey) error {
+		return fmt.Errorf("invalid ez resolver: %q", res)
+	}
 }
