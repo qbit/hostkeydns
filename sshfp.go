@@ -1,3 +1,7 @@
+/*
+Package hostkeydns facilitates verifying remote ssh keys using DNS and SSHFP
+resource records.
+*/
 package hostkeydns
 
 import (
@@ -14,7 +18,8 @@ import (
 )
 
 // DNSSecResolvers exposes configuration options for resolving hostnames using
-// DNSSEC.
+// DNSSEC. Success will be called when a matching fingerprint/SSHFP match is
+// found.
 type DNSSecResolvers struct {
 	Servers []string
 	Port    string
