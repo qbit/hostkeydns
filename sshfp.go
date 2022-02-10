@@ -19,7 +19,7 @@ import (
 
 // DNSSecResolvers exposes configuration options for resolving hostnames using
 // DNSSEC. Success will be called when a matching fingerprint/SSHFP match is
-// found.
+// found. Net can be one of "tcp", "tcp-tls" or "udp".
 type DNSSecResolvers struct {
 	Servers []string
 	Port    string
